@@ -4,7 +4,7 @@
 
 Bailanysta is a small iOS social network for short text posts. Users can read a feed, publish and edit their own posts, like and comment, search by text or hashtag, and optionally turn a rough idea into a polished post with AI.
 
-The project is a production-like slice of a social app: a SwiftUI client talking to a FastAPI backend over HTTP. It is intentionally small. It is not a full Twitter/Instagram clone.
+The public API is [https://bailanysta-api.onrender.com](https://bailanysta-api.onrender.com). The project is a production-like slice of a social app: a SwiftUI client talking to a FastAPI backend. It is intentionally small. It is not a full Twitter/Instagram clone.
 
 ## Features
 
@@ -139,14 +139,13 @@ These were left out or simplified because the scope is a small, reviewable socia
 ## Known Issues / Limitations
 
 - **Not a production identity system.** Anyone who can reach the API can impersonate a user by sending `X-User-Id`.
-- **Simulator-oriented networking.** `APIConfig.baseURL` is `http://127.0.0.1:8000`. That works on the Simulator when the API runs on the same Mac. A physical device needs the Mac’s LAN IP (and still only HTTP).
-- **No TLS locally.** Acceptable for local development; not acceptable on a public network.
+- **SQLite on Render is ephemeral** unless a persistent disk is attached; data can reset on restart or deploy.
 - **No pagination or feed caching.** Large datasets would load slowly.
 - **Comments cannot be edited or deleted.** There are no comment-like endpoints.
 - **Profile is the current mock user only.** `GET /users/{id}` exists, but the UI does not browse other profiles.
 - **AI depends on a configured OpenAI key.** Without `OPENAI_API_KEY`, generate returns HTTP 503.
 - **Seed runs only on an empty database.** An existing `backend/bailanysta.db` will not pick up new seed posts.
-- **No cloud deployment or CI in this repo.** No Dockerfile, GitHub Actions, or hosted environment is defined.
+- **No CI in this repo.** There is no GitHub Actions workflow.
 - **iOS tests cover ViewModels, not UI or `APIClient`.** Backend tests mock the AI provider; they do not call OpenAI.
 
 ## Setup
@@ -183,25 +182,30 @@ Leave `OPENAI_API_KEY` empty unless you want AI compose. Then:
 uvicorn app.main:app --reload
 ```
 
-API: [http://127.0.0.1:8000](http://127.0.0.1:8000)  
-OpenAPI: [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
+Local API: [http://127.0.0.1:8000](http://127.0.0.1:8000)  
+Local OpenAPI: [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
 
 On first launch with an empty database the API creates tables and seeds three users (`aikhan`, `dana`, `nurlan`) and a few posts. The iOS app acts as user **1** (`aikhan`).
 
 ### 6–8. iOS
 
+The app talks to the **deployed** API by default:
+
+`https://bailanysta-api.onrender.com`
+
 1. Open `iOS/Bailanysta/Bailanysta.xcodeproj` in Xcode.
 2. Confirm the API base URL in `Bailanysta/Core/Networking/APIConfig.swift`:
 
    ```swift
-   static let baseURL = URL(string: "http://127.0.0.1:8000")!
+   static let baseURL = URL(string: "https://bailanysta-api.onrender.com")!
    static let currentUserID = 1
    ```
 
+   To use a backend running on your Mac instead, temporarily set that URL to `http://127.0.0.1:8000` (Simulator only; `Info.plist` allows local HTTP).
 3. Select an **iOS Simulator** (iOS 17 or later).
 4. Run the **Bailanysta** scheme.
 
-Keep uvicorn running while using the app. `Info.plist` allows local HTTP via `NSAllowsLocalNetworking`.
+You do not need local uvicorn when using the deployed API.
 
 ## AI Setup
 
@@ -257,26 +261,37 @@ Use a Simulator name that exists on your machine. Tests stub `PostService` / `AI
 
 ## Deployment
 
-This repository does **not** include a hosted backend, Docker image, or CI pipeline. Day-to-day use is local uvicorn + Simulator.
+The public API is on Render:
 
-To run the API as a long-lived process on a machine you control:
+- API: [https://bailanysta-api.onrender.com](https://bailanysta-api.onrender.com)
+- Health: [https://bailanysta-api.onrender.com/health](https://bailanysta-api.onrender.com/health)
+- OpenAPI: [https://bailanysta-api.onrender.com/docs](https://bailanysta-api.onrender.com/docs)
+
+Blueprint: `render.yaml` (root directory `backend`). Production start command:
+
+```bash
+uvicorn app.main:app --host 0.0.0.0 --port $PORT
+```
+
+Set `OPENAI_API_KEY` in the Render dashboard. `DATABASE_URL` is optional (defaults to SQLite).
+
+To run the API **locally** instead:
 
 ```bash
 cd backend
 source .venv/bin/activate
 pip install -r requirements.txt
-# set DATABASE_URL and OPENAI_API_KEY in the environment (not in git)
 uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
-Then point `APIConfig.baseURL` at that host (HTTPS in any real deployment). SQLite on a single instance is the current database; a multi-instance or public deployment should use a server database and real authentication before exposing the API.
+Then point `APIConfig.baseURL` at `http://127.0.0.1:8000`. Local HTTP has no TLS; that is only for development.
 
 ## Future Improvements
 
 - Replace `X-User-Id` with real sign-in (tokens in Keychain)
 - Paginate feed, profile, comments, and search
-- Host the API with HTTPS and a managed database
 - Add CI (pytest + `xcodebuild test`)
+- Persistent disk or a managed database on Render
 - Media attachments, if the product needs more than text
 - Open another user’s profile from the feed
 - Comment edit/delete and a clearer “switch user” for demos
