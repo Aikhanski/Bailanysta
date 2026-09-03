@@ -8,6 +8,6 @@
 import Foundation
 
 enum APIConfig {
-    static let baseURL = URL(string: "http://127.0.0.1:8000")!
+    static let baseURL = URL(string: "https://bailanysta-api.onrender.com")!
     static let currentUserID = 1
 }
