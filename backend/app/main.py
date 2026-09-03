@@ -24,3 +24,8 @@ app.include_router(users.router)
 app.include_router(posts.router)
 app.include_router(search.router)
 app.include_router(ai.router)
+
+
+@app.get("/health")
+def health() -> dict[str, str]:
+    return {"status": "ok"}
